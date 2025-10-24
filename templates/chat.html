@@ -14,25 +14,8 @@
   </header>
 
   <main>
-    <!-- Sidebar (optional notes) -->
-    <aside class="sidebar">
-      <h2>Session</h2>
-      <p class="help">This UI is wired to <code>/get</code> and sends a form field named <code>msg</code>.</p>
-      <div class="row">
-        <label>Model</label>
-        <select disabled>
-          <option selected>gpt-4o-mini (set in backend)</option>
-        </select>
-      </div>
-      <div class="row">
-        <label>Retriever k</label>
-        <input disabled value="3" />
-        <div class="help">Configured in backend retriever.</div>
-      </div>
-    </aside>
-
-    <!-- Chat area -->
-    <section class="chat">
+    <!-- Chat area only -->
+    <section class="chat full">
       <div id="messages" class="messages" aria-live="polite"></div>
 
       <div class="composer">
@@ -46,7 +29,7 @@
   </main>
 
   <footer>
-    <span>Built for RAG workflows. Not a medical device. For informational purposes only.</span>
+    <span>Built for RAG workflows. Not a medical device. For learning purposes only.</span>
   </footer>
 
   <script>
@@ -77,6 +60,7 @@
       row.appendChild(col);
       messagesEl.appendChild(row);
       messagesEl.scrollTop = messagesEl.scrollHeight;
+      return p; // return the text container for streaming
     }
 
     function setBusy(b){
@@ -85,29 +69,53 @@
       inputEl.disabled = b; sendBtn.disabled = b;
     }
 
+    // === New: Typewriter animation for initial message ===
+    async function typeAnimated(text, delay=30){
+      const p = addMessage('assistant', '');
+      for (let i = 0; i < text.length; i++) {
+        p.textContent += text[i];
+        await new Promise(r => setTimeout(r, delay));
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      }
+    }
+
     async function send(){
       const text = inputEl.value.trim();
       if(!text) return;
       addMessage('user', text);
+
+      // Create assistant bubble for streaming
+      const p = addMessage('assistant', '');
       inputEl.value = '';
       setBusy(true);
-      try{
-        // IMPORTANT: backend expects form data with key "msg"
-        const fd = new FormData();
-        fd.append('msg', text);
 
-        const res = await fetch('/get', { method:'POST', body: fd });
-        if(!res.ok){
-          const msg = await res.text();
-          throw new Error(msg || `HTTP ${res.status}`);
-        }
-        // Backend returns plain text (answer string)
-        const answer = await res.text();
-        addMessage('assistant', answer || '(No answer)');
+      try{
+        const url = `/stream?` + new URLSearchParams({ msg: text }).toString();
+        const es = new EventSource(url);
+
+        es.onmessage = (evt) => {
+          try{
+            const data = JSON.parse(evt.data);
+            if (data.done) {
+              es.close();
+              setBusy(false);
+              return;
+            }
+            if (data.token) {
+              p.textContent += data.token;
+              messagesEl.scrollTop = messagesEl.scrollHeight;
+            }
+          }catch(e){}
+        };
+
+        es.onerror = () => {
+          es.close();
+          setBusy(false);
+          if (!p.textContent) p.textContent = 'Error: streaming failed.';
+        };
       }catch(err){
-        addMessage('assistant', `Error: ${err.message}`);
-      }finally{
         setBusy(false);
+        p.textContent = `Error: ${err.message}`;
       }
     }
 
@@ -116,8 +124,10 @@
       if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); send(); }
     });
 
-    // Welcome
-    addMessage('assistant', 'Hello! I’m Medibot. Ask a concise medical question.');
+    // === Call typewriter animation on load ===
+    window.addEventListener('DOMContentLoaded', () => {
+      typeAnimated("Hello! I’m Medibot. Ask a concise medical question.");
+    });
   </script>
 </body>
 </html>

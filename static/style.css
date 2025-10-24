@@ -29,3 +29,16 @@ main{display:grid;grid-template-columns:280px 1fr;gap:1rem;max-width:1200px;marg
 .spinner{width:16px;height:16px;border:2px solid var(--muted);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 footer{display:flex;justify-content:center;color:var(--muted);padding:.8rem;font-size:.8rem}
+
+/* === Full-width Chat Layout (added) === */
+.chat.full {
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+main {
+  display: flex;
+  justify-content: center;
+  padding: 1rem;
+}
