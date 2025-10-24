@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Medical Chatbot</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="app light" id="root">
+  <header>
+    <h1>Medibot</h1>
+    <span class="spacer"></span>
+    <button id="theme" title="Toggle light/dark">🌗 Theme</button>
+  </header>
+
+  <main>
+    <!-- Sidebar (optional notes) -->
+    <aside class="sidebar">
+      <h2>Session</h2>
+      <p class="help">This UI is wired to <code>/get</code> and sends a form field named <code>msg</code>.</p>
+      <div class="row">
+        <label>Model</label>
+        <select disabled>
+          <option selected>gpt-4o-mini (set in backend)</option>
+        </select>
+      </div>
+      <div class="row">
+        <label>Retriever k</label>
+        <input disabled value="3" />
+        <div class="help">Configured in backend retriever.</div>
+      </div>
+    </aside>
+
+    <!-- Chat area -->
+    <section class="chat">
+      <div id="messages" class="messages" aria-live="polite"></div>
+
+      <div class="composer">
+        <textarea id="input" placeholder="Ask a medical question… Shift+Enter for newline"></textarea>
+        <button id="send" class="btn primary">
+          <span id="sendText">Send</span>
+          <span id="busy" class="spinner" style="display:none"></span>
+        </button>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span>Built for RAG workflows. Not a medical device. For informational purposes only.</span>
+  </footer>
+
+  <script>
+    const qs = sel => document.querySelector(sel);
+    const messagesEl = qs('#messages');
+    const inputEl = qs('#input');
+    const sendBtn = qs('#send');
+    const busyEl = qs('#busy');
+    const sendTextEl = qs('#sendText');
+
+    // Theme toggle
+    qs('#theme').addEventListener('click', () => {
+      document.body.classList.toggle('light');
+    });
+
+    // Render helpers
+    function el(tag, cls){const e=document.createElement(tag); if(cls) e.className=cls; return e;}
+    function addMessage(role, text){
+      const row = el('div', `msg ${role}`);
+      const avatar = el('div','avatar');
+      avatar.textContent = role === 'user' ? 'U' : 'AI';
+      const bubble = el('div','bubble');
+      const p = el('div'); p.textContent = text || '';
+      bubble.appendChild(p);
+      const meta = el('div','meta'); meta.textContent = role === 'user' ? 'You' : 'Assistant';
+      row.appendChild(avatar);
+      const col = el('div'); col.appendChild(bubble); col.appendChild(meta);
+      row.appendChild(col);
+      messagesEl.appendChild(row);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function setBusy(b){
+      busyEl.style.display = b ? 'inline-block' : 'none';
+      sendTextEl.textContent = b ? 'Sending…' : 'Send';
+      inputEl.disabled = b; sendBtn.disabled = b;
+    }
+
+    async function send(){
+      const text = inputEl.value.trim();
+      if(!text) return;
+      addMessage('user', text);
+      inputEl.value = '';
+      setBusy(true);
+      try{
+        // IMPORTANT: backend expects form data with key "msg"
+        const fd = new FormData();
+        fd.append('msg', text);
+
+        const res = await fetch('/get', { method:'POST', body: fd });
+        if(!res.ok){
+          const msg = await res.text();
+          throw new Error(msg || `HTTP ${res.status}`);
+        }
+        // Backend returns plain text (answer string)
+        const answer = await res.text();
+        addMessage('assistant', answer || '(No answer)');
+      }catch(err){
+        addMessage('assistant', `Error: ${err.message}`);
+      }finally{
+        setBusy(false);
+      }
+    }
+
+    sendBtn.addEventListener('click', send);
+    inputEl.addEventListener('keydown', (e)=>{
+      if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); send(); }
+    });
+
+    // Welcome
+    addMessage('assistant', 'Hello! I’m Medibot. Ask a concise medical question.');
+  </script>
+</body>
+</html>
